@@ -64,9 +64,10 @@ static NSString *currentCategory;
 %hook SBBannerContainerViewController
 - (void)_handleBannerTapGesture:(id)gesture withActionContext:(id)action
 {
-	// _bannerItem
-	// if there's no action, there's no point in closing it
-	if (action != nil)
+	// if this isn't the volume banner, do what it wants to do
+	SBBulletinBannerItem *bannerItem = [self _bannerItem];
+	NSString *sectionID = bannerItem.seedBulletin.sectionID;
+	if (![sectionID isEqualToString:BULLETIN_IDENTIFIER])
 		%orig;
 }
 %end

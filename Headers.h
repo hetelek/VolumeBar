@@ -72,3 +72,7 @@
 @interface SBUIBannerContext
 @property SBBulletinBannerItem *item;
 @end
+
+@interface SBBannerContainerViewController
+- (SBBulletinBannerItem *)_bannerItem;
+@end
