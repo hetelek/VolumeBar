@@ -1,0 +1,9 @@
+Package: com.expetelek.volumebar
+Name: VolumeBar
+Depends: mobilesubstrate
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: An awesome MobileSubstrate tweak!
+Maintainer: Stevie Hetelekides
+Author: Stevie Hetelekides
+Section: Tweaks
