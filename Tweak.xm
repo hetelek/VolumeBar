@@ -5,6 +5,8 @@
 
 static const NSInteger DISMISS_INTERVAL_DELAY = 7.0;
 static const NSInteger REPLACE_INTERVAL_DELAY = 5.0;
+static const CGFloat SLIDER_MAX_WIDTH = 413.0;
+static const CGFloat SLIDER_HEIGHT = 34.0;
 
 static NSBundle *volumeBarBundle = [NSBundle bundleWithPath:BUNDLE_PATH];
 static NSString *currentCategory;
@@ -62,6 +64,7 @@ static NSString *currentCategory;
 %hook SBBannerContainerViewController
 - (void)_handleBannerTapGesture:(id)gesture withActionContext:(id)action
 {
+	// _bannerItem
 	// if there's no action, there's no point in closing it
 	if (action != nil)
 		%orig;
@@ -78,20 +81,19 @@ static NSString *currentCategory;
 	if (![contentView isKindOfClass:[%c(SBDefaultBannerView) class]])
 		return;
 
-	// calculate frames for label/slider
+	CGRect contentViewFrame = contentView.frame;
 
-	// do some stupid shit
-	CGRect screenSize = [UIScreen mainScreen].bounds;
-	CGRect contentFrame = [contentView _contentFrame];
-	BOOL portrait = abs(contentFrame.size.width - screenSize.size.width) < abs(contentFrame.size.width - screenSize.size.height);
+	// calculate label frame
+	CGRect labelFrame = CGRectMake(0, 5, CGRectGetWidth(contentViewFrame), 15);
 
-	CGRect trueContentFrame = screenSize;
-	if (!portrait)
-		trueContentFrame.size.width = trueContentFrame.size.height;
-	trueContentFrame.size.height = contentFrame.size.height;
+	// calculate slider frame
+	CGFloat sliderWidth = fmin(SLIDER_MAX_WIDTH, CGRectGetWidth(contentViewFrame) - 20);
+	CGFloat sliderX = CGRectGetMidX(contentViewFrame) - (sliderWidth / 2);
+	CGFloat sliderY = CGRectGetMidY(contentViewFrame) - SLIDER_HEIGHT / 2;
 
-	CGRect labelFrame = CGRectMake(0, 10, trueContentFrame.size.width, 15);
-	CGRect sliderFrame = CGRectMake(10, 10, trueContentFrame.size.width - 20, 50);
+	CGRect sliderFrame = CGRectMake(sliderX, sliderY, sliderWidth, SLIDER_HEIGHT);
+
+	BOOL hideLabel = CGRectGetHeight(contentViewFrame) < 50.0;
 
 	// update frames
 	for (UIView *view in contentView.subviews)
@@ -99,7 +101,13 @@ static NSString *currentCategory;
 		if ([view isKindOfClass:[%c(AlwaysWhiteSlider) class]])
 			view.frame = sliderFrame;
 		else if ([view isKindOfClass:[UILabel class]])
+		{
+			if (hideLabel)
+				view.hidden = YES;
+			else
+				view.hidden = NO;
 			view.frame = labelFrame;
+		}
 	}
 }
 %end
