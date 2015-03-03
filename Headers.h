@@ -11,6 +11,7 @@
 @end
 
 @interface AlwaysWhiteSlider : SBUIControlCenterSlider
+@property (assign, nonatomic) BOOL trackVolumeChanges;
 @end
 
 @interface AVSystemController

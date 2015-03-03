@@ -3,8 +3,8 @@
 #define BUNDLE_PATH @"/Library/Application Support/VolumeBar/VolumeBar.bundle"
 #define BULLETIN_IDENTIFIER @"volumebar.expetelek.com"
 
-static const NSInteger DISMISS_INTERVAL_DELAY = 7.0;
-static const NSInteger REPLACE_INTERVAL_DELAY = 5.0;
+static const NSInteger DISMISS_INTERVAL_DELAY = 3.0;
+static const NSInteger REPLACE_INTERVAL_DELAY = 2.0;
 static const CGFloat SLIDER_MAX_WIDTH = 413.0;
 static const CGFloat SLIDER_HEIGHT = 34.0;
 
@@ -26,16 +26,18 @@ static NSString *currentCategory;
 %end
 
 %subclass AlwaysWhiteSlider : SBUIControlCenterSlider
-- (AlwaysWhiteSlider *)init
+%new
+- (void)setTrackVolumeChanges:(BOOL)trackVolumeChanges
 {
-	self = %orig;
-
-	[[NSNotificationCenter defaultCenter] addObserver:self
+	if (trackVolumeChanges)
+		[[NSNotificationCenter defaultCenter] addObserver:self
 	                                         selector:@selector(volumeChanged:)
 	                                             name:@"AVSystemController_SystemVolumeDidChangeNotification"
 	                                           object:nil];
-
-	return self;
+	else
+		[[NSNotificationCenter defaultCenter] removeObserver:self
+													name:@"AVSystemController_SystemVolumeDidChangeNotification"
+												  object:nil];
 }
 
 - (void)setAdjusting:(BOOL)arg1
@@ -57,7 +59,13 @@ static NSString *currentCategory;
 {
 	NSDictionary *dict = notification.userInfo;
 	float newVolume = [[dict objectForKey:@"AVSystemController_AudioVolumeNotificationParameter"] floatValue];
-	self.value = newVolume;
+	if (self.value != newVolume)
+	{
+		SBBannerController *bannerController = (SBBannerController *)[%c(SBBannerController) sharedInstance];
+		[bannerController rescheduleTimers];
+
+		self.value = newVolume;
+	}
 }
 %end
 
@@ -135,8 +143,11 @@ static NSString *currentCategory;
 
 	// create slider
 	AlwaysWhiteSlider *slider = [[%c(AlwaysWhiteSlider) alloc] init];
+	slider.trackVolumeChanges = YES;
+
 	[slider addTarget:self action:@selector(sliderTouchBegan:) forControlEvents:UIControlEventTouchDown];
 	[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpInside];
+	[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpOutside];
 	[slider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
 
 	// get current volume
@@ -164,30 +175,25 @@ static NSString *currentCategory;
 }
 
 %new
-- (void)sliderValueChanged:(UISlider *)sender
+- (void)sliderValueChanged:(AlwaysWhiteSlider *)sender
 {
-	// set volume (on a new thread)
+	// update volume
 	[[%c(AVSystemController) sharedAVSystemController] setVolumeTo:sender.value forCategory:currentCategory];
 }
 
 %new
-- (void)sliderTouchBegan:(UISlider *)sender
+- (void)sliderTouchBegan:(AlwaysWhiteSlider *)sender
 {
-	[[NSNotificationCenter defaultCenter] removeObserver:sender
-													name:@"AVSystemController_SystemVolumeDidChangeNotification"
-												  object:nil];
-	
+	sender.trackVolumeChanges = NO;
+
 	// remove dismiss/replace timers
 	[self removeTimers];
 }
 
 %new
-- (void)sliderTouchEnded:(UISlider *)sender
+- (void)sliderTouchEnded:(AlwaysWhiteSlider *)sender
 {
-	[[NSNotificationCenter defaultCenter] addObserver:sender
-	                                         selector:@selector(volumeChanged:)
-	                                             name:@"AVSystemController_SystemVolumeDidChangeNotification"
-	                                           object:nil];
+	sender.trackVolumeChanges = YES;
 
 	// add dismiss/replace timers
 	[self addTimers];
