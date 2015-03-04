@@ -62,6 +62,7 @@
 @property NSString *title;
 @property NSString *message;
 @property NSString *sectionID;
+@property NSString *bulletinID;
 @property BBAction *defaultAction;
 
 - (BBBulletinRequest *)init;

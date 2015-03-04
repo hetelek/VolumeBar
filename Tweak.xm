@@ -4,8 +4,8 @@
 #define BULLETIN_SLIDER_IDENTIFIER @"slider.volumebar.expetelek.com"
 #define BULLETIN_RINGER_IDENTIFIER @"ringer.volumebar.expetelek.com"
 
-static const NSInteger DISMISS_INTERVAL_DELAY = 3.0;
-static const NSInteger REPLACE_INTERVAL_DELAY = 2.0;
+static const NSInteger DISMISS_INTERVAL_DELAY = 3;
+static const NSInteger REPLACE_INTERVAL_DELAY = 2;
 static const CGFloat SLIDER_MAX_WIDTH = 413.0;
 static const CGFloat SLIDER_HEIGHT = 34.0;
 
@@ -23,6 +23,18 @@ static NSString *currentCategory;
 	// restart timers
 	[self performSelector:@selector(_replaceIntervalElapsed) withObject:nil afterDelay:REPLACE_INTERVAL_DELAY];
 	[self performSelector:@selector(_dismissIntervalElapsed) withObject:nil afterDelay:DISMISS_INTERVAL_DELAY];
+}
+
+- (void)_setBannerSticky:(BOOL)sticky
+{
+	%orig;
+
+	SBBulletinBannerItem *bannerItem = [self _bannerItem];
+	NSString *sectionID = bannerItem.seedBulletin.sectionID;
+
+	// don't delay if this banner is a volume banner
+	if ([sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER] || [sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER])
+		MSHookIvar<BOOL>(self, "_replaceDelayIsActive") = NO;
 }
 %end
 
@@ -347,9 +359,9 @@ static NSString *currentCategory;
 
 		// create request
 		BBBulletinRequest *request = [[%c(BBBulletinRequest) alloc] init];
-		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
-		request.message = @"";
+		request.bulletinID = BULLETIN_RINGER_IDENTIFIER;
 		request.sectionID = BULLETIN_RINGER_IDENTIFIER;
+		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
 		request.defaultAction = [%c(BBAction) action];
 
 		// add bulletin request
@@ -388,8 +400,9 @@ static NSString *currentCategory;
 
 		// create request
 		BBBulletinRequest *request = [[%c(BBBulletinRequest) alloc] init];
-		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
+		request.bulletinID = BULLETIN_SLIDER_IDENTIFIER;
 		request.sectionID = BULLETIN_SLIDER_IDENTIFIER;
+		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
 		request.defaultAction = [%c(BBAction) action];
 
 		// add bulletin request
