@@ -382,7 +382,7 @@ static NSString *currentCategory;
 	NSString *sectionID = bannerItem.seedBulletin.sectionID;
 
 	// check if already showing
-	if (![sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER] && ![sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER])
+	if (![sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER])
 	{
 		// get category and localized string key
 		NSBundle *bundle = [NSBundle mainBundle];
