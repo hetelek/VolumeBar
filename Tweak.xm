@@ -1,7 +1,8 @@
 #import "Headers.h"
 
 #define BUNDLE_PATH @"/Library/Application Support/VolumeBar/VolumeBar.bundle"
-#define BULLETIN_IDENTIFIER @"volumebar.expetelek.com"
+#define BULLETIN_SLIDER_IDENTIFIER @"slider.volumebar.expetelek.com"
+#define BULLETIN_RINGER_IDENTIFIER @"ringer.volumebar.expetelek.com"
 
 static const NSInteger DISMISS_INTERVAL_DELAY = 3.0;
 static const NSInteger REPLACE_INTERVAL_DELAY = 2.0;
@@ -75,7 +76,7 @@ static NSString *currentCategory;
 	// if this isn't the volume banner, do what it wants to do
 	SBBulletinBannerItem *bannerItem = [self _bannerItem];
 	NSString *sectionID = bannerItem.seedBulletin.sectionID;
-	if (![sectionID isEqualToString:BULLETIN_IDENTIFIER])
+	if (![sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER])
 		%orig;
 }
 %end
@@ -90,6 +91,13 @@ static NSString *currentCategory;
 	if (![contentView isKindOfClass:[%c(SBDefaultBannerView) class]])
 		return;
 
+	// make sure this is a ringer/slider banner
+	NSString *sectionID = self.bannerContext.item.seedBulletin.sectionID;
+	BOOL isRingerNotification = [sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER];
+	BOOL isSliderNotification = [sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER];
+	if (!isSliderNotification && !isRingerNotification)
+		return;
+
 	CGRect contentViewFrame = contentView.frame;
 
 	// calculate label frame
@@ -98,9 +106,14 @@ static NSString *currentCategory;
 	// calculate slider frame
 	CGFloat sliderWidth = fmin(SLIDER_MAX_WIDTH, CGRectGetWidth(contentViewFrame) - 20);
 	CGFloat sliderX = CGRectGetMidX(contentViewFrame) - (sliderWidth / 2);
-	CGFloat sliderY = CGRectGetMidY(contentViewFrame) - SLIDER_HEIGHT / 2;
-
+	CGFloat sliderY = CGRectGetMidY(contentViewFrame) - (SLIDER_HEIGHT / 2);
 	CGRect sliderFrame = CGRectMake(sliderX, sliderY, sliderWidth, SLIDER_HEIGHT);
+
+	// calculate image view frame
+	CGFloat ringerImageViewY = CGRectGetMaxY(labelFrame) + 2;
+	CGFloat ringerImageViewSize = CGRectGetHeight(contentViewFrame) - ringerImageViewY - 10;
+	CGFloat ringerImageViewX = CGRectGetMidX(contentViewFrame) - (ringerImageViewSize / 2);
+	CGRect ringerImageViewFrame = CGRectMake(ringerImageViewX, ringerImageViewY, ringerImageViewSize, ringerImageViewSize);
 
 	BOOL hideLabel = CGRectGetHeight(contentViewFrame) < 50.0;
 
@@ -117,6 +130,52 @@ static NSString *currentCategory;
 				view.hidden = NO;
 			view.frame = labelFrame;
 		}
+		else if ([view isKindOfClass:[UIImageView class]])
+		{
+			UIImageView *imageView = (UIImageView *)view;
+			imageView.frame = ringerImageViewFrame;
+		}
+	}
+}
+%end
+
+%hook SBBannerContainerViewController
+- (void)viewWillDisappear:(BOOL)animated
+{
+	// get view, remove observer
+	SBDefaultBannerView *contentView = MSHookIvar<SBDefaultBannerView *>(self.bannerContextView, "_contentView");
+	if (contentView)
+		[[NSNotificationCenter defaultCenter] removeObserver:contentView];
+
+	%orig;
+}
+%end
+
+%hook SBDefaultBannerView
+%new
+- (void)ringerChanged:(NSNotification *)notification
+{
+	// get ringer state
+	SBMediaController *mediaController = (SBMediaController *)[%c(SBMediaController) sharedInstance];
+	BOOL ringerMuted = [mediaController isRingerMuted];
+	NSString *imageName;
+	if (ringerMuted)
+		imageName = @"ringer-silence";
+	else
+		imageName = @"ringer";
+
+	// get image
+	UIImage *image = [[UIImage imageNamed:imageName] _flatImageWithWhite:1 alpha:1];
+
+	// update ringer image view
+	for (UIView *view in self.subviews)
+	{
+		if ([view isKindOfClass:[UIImageView class]])
+		{
+			UIImageView *imageView = (UIImageView *)view;
+			imageView.image = image;
+			break;
+		}
 	}
 }
 %end
@@ -125,51 +184,89 @@ static NSString *currentCategory;
 - (SBDefaultBannerView *)newBannerViewForContext:(SBUIBannerContext *)bannerContext
 {
 	SBDefaultBannerView *view = %orig;
+	NSString *sectionID = bannerContext.item.seedBulletin.sectionID;
 
-	// make sure this is a volume notification
-	if (![bannerContext.item.seedBulletin.sectionID isEqualToString:BULLETIN_IDENTIFIER])
-		return view;
+	BOOL isRingerNotification = [sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER];
+	BOOL isSliderNotification = [sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER];
 
-	// hide time text
-	SBDefaultBannerTextView *textView = MSHookIvar<SBDefaultBannerTextView *>(view, "_textView");
-	textView.hidden = YES;
+	// check for the notification type
+	if (isSliderNotification || isRingerNotification)
+	{
+		// hide time text
+		SBDefaultBannerTextView *textView = MSHookIvar<SBDefaultBannerTextView *>(view, "_textView");
+		textView.hidden = YES;
 
-	// create label
-	UILabel *label = [[UILabel alloc] init];
-	label.font = [%c(SBDefaultBannerTextView) _primaryTextFont];
-	label.textColor = [UIColor whiteColor];
-	label.textAlignment = UITextAlignmentCenter;
-	label.text = textView.primaryText;
+		// create label
+		UILabel *label = [[UILabel alloc] init];
+		label.font = [%c(SBDefaultBannerTextView) _primaryTextFont];
+		label.textColor = [UIColor whiteColor];
+		label.textAlignment = UITextAlignmentCenter;
+		label.text = textView.primaryText;
 
-	// create slider
-	AlwaysWhiteSlider *slider = [[%c(AlwaysWhiteSlider) alloc] init];
-	slider.trackVolumeChanges = YES;
+		// add label view
+		[view addSubview:label];
 
-	[slider addTarget:self action:@selector(sliderTouchBegan:) forControlEvents:UIControlEventTouchDown];
-	[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpInside];
-	[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpOutside];
-	[slider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+		if (isRingerNotification)
+		{
+			/*
+				imageNamed:, strings
 
-	// get current volume
-    float volume = 0;
-    [[%c(AVSystemController) sharedAVSystemController] getVolume:&volume forCategory:currentCategory];
+				ringer-silence, SILENT_VOLUME
+				ringer
+			*/
 
-	slider.value = volume;
+			SBMediaController *mediaController = (SBMediaController *)[%c(SBMediaController) sharedInstance];
+			BOOL ringerMuted = [mediaController isRingerMuted];
+			NSString *imageName;
+			if (ringerMuted)
+				imageName = @"ringer-silence";
+			else
+				imageName = @"ringer";
 
-	// set slider images
-	slider.minimumValueImage = [UIImage imageNamed:@"min" inBundle:volumeBarBundle compatibleWithTraitCollection:nil];
-	slider.maximumValueImage = [UIImage imageNamed:@"max" inBundle:volumeBarBundle compatibleWithTraitCollection:nil];
+			UIImage *image = [[UIImage imageNamed:imageName] _flatImageWithWhite:1 alpha:1];
+			UIImageView *ringerImageView = [[UIImageView alloc] initWithImage:image];
+			ringerImageView.contentMode = UIViewContentModeScaleAspectFit;
 
-	// set volume bounds [0, 1]
-	slider.minimumValue = 0.0;
-	slider.maximumValue = 1.0;
+			[[NSNotificationCenter defaultCenter] addObserver:view
+	                                         selector:@selector(ringerChanged:)
+	                                             name:@"SBRingerChangedNotification"
+	                                           object:nil];
 
-	// add views
-	[view addSubview:slider];
-	[view addSubview:label];
+			// add image to view
+			[view addSubview:ringerImageView];
+		}
+		else if (isSliderNotification)
+		{
+			// create slider
+			AlwaysWhiteSlider *slider = [[%c(AlwaysWhiteSlider) alloc] init];
+			slider.trackVolumeChanges = YES;
 
-	// make icons white
-	slider.adjusting = YES;
+			[slider addTarget:self action:@selector(sliderTouchBegan:) forControlEvents:UIControlEventTouchDown];
+			[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpInside];
+			[slider addTarget:self action:@selector(sliderTouchEnded:) forControlEvents:UIControlEventTouchUpOutside];
+			[slider addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+
+			// get current volume
+		    float volume = 0;
+		    [[%c(AVSystemController) sharedAVSystemController] getVolume:&volume forCategory:currentCategory];
+
+			slider.value = volume;
+
+			// set slider images
+			slider.minimumValueImage = [UIImage imageNamed:@"min" inBundle:volumeBarBundle compatibleWithTraitCollection:nil];
+			slider.maximumValueImage = [UIImage imageNamed:@"max" inBundle:volumeBarBundle compatibleWithTraitCollection:nil];
+
+			// set volume bounds [0, 1]
+			slider.minimumValue = 0.0;
+			slider.maximumValue = 1.0;
+
+			// add view
+			[view addSubview:slider];
+
+			// make icons white
+			slider.adjusting = YES;
+		}
+	}
 
 	return view;
 }
@@ -220,6 +317,50 @@ static NSString *currentCategory;
 }
 %end
 
+%hook SBHUDController
+- (void)presentHUDView:(id)view autoDismissWithDelay:(double)delay
+{
+	BOOL isRingerView = [view isKindOfClass:[%c(SBRingerHUDView) class]];
+
+	// if it's locked or not what we're looking for, let it do what it wants to do
+	if ([%c(SBLockScreenManager) sharedInstance].isUILocked || !isRingerView)
+	{
+		%orig;
+		return;
+	}
+
+	// get current banner
+	SBBannerController *bannerController = (SBBannerController *)[%c(SBBannerController) sharedInstance];
+	SBBulletinBannerItem *bannerItem = [bannerController _bannerItem];
+	NSString *sectionID = bannerItem.seedBulletin.sectionID;
+
+	// check if already showing
+	if (![sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER])
+	{
+		// get category and localized string key
+		NSBundle *bundle = [NSBundle mainBundle];
+		NSString *key;
+		if ([%c(VolumeControl) sharedVolumeControl].headphonesPresent)
+			key = @"HEADPHONES_VOLUME";
+		else
+			key = @"RINGER_VOLUME";
+
+		// create request
+		BBBulletinRequest *request = [[%c(BBBulletinRequest) alloc] init];
+		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
+		request.message = @"";
+		request.sectionID = BULLETIN_RINGER_IDENTIFIER;
+		request.defaultAction = [%c(BBAction) action];
+
+		// add bulletin request
+		SBBulletinBannerController *bulletinBannerController = (SBBulletinBannerController *)[%c(SBBulletinBannerController) sharedInstance];
+		[bulletinBannerController observer:nil addBulletin:request forFeed:2];
+	}
+	else
+		[bannerController rescheduleTimers];
+}
+%end
+
 %hook VolumeControl
 - (void)_presentVolumeHUDWithMode:(int)mode volume:(float)volume
 {
@@ -229,7 +370,7 @@ static NSString *currentCategory;
 	NSString *sectionID = bannerItem.seedBulletin.sectionID;
 
 	// check if already showing
-	if (![sectionID isEqualToString:BULLETIN_IDENTIFIER])
+	if (![sectionID isEqualToString:BULLETIN_RINGER_IDENTIFIER] && ![sectionID isEqualToString:BULLETIN_SLIDER_IDENTIFIER])
 	{
 		// get category and localized string key
 		NSBundle *bundle = [NSBundle mainBundle];
@@ -248,7 +389,7 @@ static NSString *currentCategory;
 		// create request
 		BBBulletinRequest *request = [[%c(BBBulletinRequest) alloc] init];
 		request.title = [bundle localizedStringForKey:key value:@"" table:@"SpringBoard"];
-		request.sectionID = BULLETIN_IDENTIFIER;
+		request.sectionID = BULLETIN_SLIDER_IDENTIFIER;
 		request.defaultAction = [%c(BBAction) action];
 
 		// add bulletin request

@@ -1,12 +1,31 @@
 #import <substrate.h>
 #import <UIKit/UIKit.h>
 
+@interface SBLockScreenManager
+@property (assign, nonatomic) BOOL isUILocked;
+
++ (SBLockScreenManager *)sharedInstance;
+@end
+
+@interface SBMediaController
++ (SBMediaController *)sharedInstance;
+
+- (BOOL)isRingerMuted;
+@end
+
 @interface UIImage (UndocumentedMethods)
 - (UIImage *)_flatImageWithWhite:(CGFloat)white alpha:(CGFloat)alpha;
 @end
 
+@interface VolumeControl
+@property (readonly) BOOL headphonesPresent;
+
++ (VolumeControl *)sharedVolumeControl;
+@end
+
 @interface SBUIControlCenterSlider : UISlider
 @property (assign, nonatomic) BOOL adjusting;
+
 + (id)_minTrackImageForState:(long long)state;
 @end
 
@@ -23,6 +42,7 @@
 
 @interface SBDefaultBannerTextView : UIView
 @property (nonatomic, readonly) NSString *primaryText;
+
 + (UIFont *)_primaryTextFont;
 @end
 
@@ -52,6 +72,8 @@
 @end
 
 @interface SBBannerController : NSObject
++ (SBBannerController *)sharedInstance;
+
 - (SBBulletinBannerItem *)_bannerItem;
 
 // new
@@ -75,5 +97,11 @@
 @end
 
 @interface SBBannerContainerViewController
+@property (nonatomic, readonly) SBDefaultBannerView *bannerContextView;
+
 - (SBBulletinBannerItem *)_bannerItem;
+@end
+
+@interface SBBannerContextView
+@property (readonly) SBUIBannerContext *bannerContext;
 @end
