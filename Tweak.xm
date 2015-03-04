@@ -152,7 +152,7 @@ static NSString *currentCategory;
 %end
 
 %hook SBBannerContainerViewController
-- (void)viewWillDisappear:(BOOL)animated
+- (void)removeChildPullDownViewController:(id)viewController
 {
 	// get view, remove observer
 	SBDefaultBannerView *contentView = MSHookIvar<SBDefaultBannerView *>(self.bannerContextView, "_contentView");
