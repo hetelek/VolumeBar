@@ -394,7 +394,11 @@ static NSString *currentCategory;
 		}
 		else
 		{
-			key = @"VOLUME_VOLUME";
+			if ([%c(VolumeControl) sharedVolumeControl].headphonesPresent)
+				key = @"HEADPHONES_VOLUME";
+			else
+				key = @"VOLUME_VOLUME";
+
 			currentCategory = @"Audio/Video";
 		}
 
